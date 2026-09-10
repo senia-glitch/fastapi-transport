@@ -1,0 +1,1 @@
+"""fastbase.cli — command-line interface (stdlib argparse only)."""

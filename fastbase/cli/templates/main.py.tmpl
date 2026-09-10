@@ -1,0 +1,30 @@
+# fastbase: generated
+"""Точка входа приложения."""
+
+from fastapi import FastAPI
+
+from fastbase import create_app, run_api
+
+from app.core.config import settings
+from app.api.v1.routes import health
+
+
+def build() -> FastAPI:
+    return create_app(
+        settings=settings,
+        routers=[
+            health.router,
+            # подключайте свои роутеры здесь
+        ],
+    )
+
+
+app = build()
+
+
+def main() -> None:
+    run_api("app.main:app")
+
+
+if __name__ == "__main__":
+    main()
