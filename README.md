@@ -30,7 +30,7 @@ pip install -e ".[dev]"
 
 ```bash
 # 1. Сгенерировать структуру проекта в текущей папке
-fastbase init
+fastapi-transport init
 
 # 2. Отредактировать .env.fastbase (при необходимости)
 
@@ -274,9 +274,13 @@ app = create_app(settings, routers, lifespan=lifespan)
 
 ## CLI
 
-Алиас `fb` работает для всех команд.
+Команда пакета — `fastapi-transport`. Есть алиасы `fastbase` и `fb`; работают идентично.
 
-### `fastbase init [--path app] [--force]`
+```bash
+fastapi-transport help   # список команд + ссылка на GitHub
+```
+
+### `fastapi-transport init [--path app] [--force]`
 
 Генерирует каноничную структуру. `--path` — целевая папка (по умолчанию `app`). `--force` перезаписывает файлы с маркером `# fastbase: generated`; файлы без маркера не трогаются никогда.
 
@@ -287,7 +291,7 @@ app = create_app(settings, routers, lifespan=lifespan)
 - `skip:` — файл существует и не перезаписан;
 - `skip (user code):` — файл без маркера, пользовательский код.
 
-### `fastbase check`
+### `fastapi-transport check`
 
 Read-only проверка проекта:
 
@@ -300,7 +304,7 @@ Read-only проверка проекта:
 
 Печатает `ok` / `warn` / `fail`. Код возврата `1` при `fail`, иначе `0`.
 
-### `fastbase version`
+### `fastapi-transport version`
 
 Печатает версию пакета одной строкой.
 
