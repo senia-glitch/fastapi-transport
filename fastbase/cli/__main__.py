@@ -1,9 +1,12 @@
-"""CLI entry point: `fastbase` and alias `fb`.
+"""CLI entry point for the fastapi-transport package.
 
 Commands:
-    fastbase init [--path app] [--force]
-    fastbase check
-    fastbase version
+    fastapi-transport init [--path app] [--force]
+    fastapi-transport check
+    fastapi-transport version
+    fastapi-transport help
+
+Aliases: `fastbase`, `fb`.
 """
 
 import argparse
@@ -13,15 +16,22 @@ from fastbase.cli._check import main_check
 from fastbase.cli._init import main_init
 from fastbase.cli._version import main_version
 
+PROG = "fastapi-transport"
+GITHUB_URL = "https://github.com/senia-glitch/fastapi-transport"
+DESCRIPTION = "Thin infrastructure over FastAPI for a uniform transport (API) layer."
+EPILOG = f"GitHub: {GITHUB_URL}"
 
-def main(argv: list[str] | None = None) -> int:
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="fastbase",
-        description="fastbase — thin infrastructure over FastAPI.",
+        prog=PROG,
+        description=DESCRIPTION,
+        epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_init = sub.add_parser("init", help="Generate project skeleton.")
+    p_init = sub.add_parser("init", help="Generate the canonical project skeleton.")
     p_init.add_argument(
         "--path",
         default="app",
@@ -35,7 +45,13 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("check", help="Check the project for common problems.")
     sub.add_parser("version", help="Print package version.")
+    sub.add_parser("help", help="Show this help message and exit.")
 
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
     args = parser.parse_args(argv)
 
     if args.cmd == "init":
@@ -44,6 +60,9 @@ def main(argv: list[str] | None = None) -> int:
         return main_check()
     if args.cmd == "version":
         return main_version()
+    if args.cmd == "help":
+        parser.print_help()
+        return 0
     return 2
 
 

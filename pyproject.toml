@@ -26,6 +26,7 @@ dev = [
 ]
 
 [project.scripts]
+fastapi-transport = "fastbase.cli.__main__:main"
 fastbase = "fastbase.cli.__main__:main"
 fb = "fastbase.cli.__main__:main"
 

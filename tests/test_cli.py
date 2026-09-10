@@ -97,7 +97,24 @@ def test_cli_requires_subcommand(
     with pytest.raises(SystemExit):
         cli_main([])
 
+def test_cli_dispatches_help(capsys: pytest.CaptureFixture) -> None:
+    rc = cli_main(["help"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "init" in out
+    assert "check" in out
+    assert "version" in out
+    assert "help" in out
+    assert "https://github.com/senia-glitch/fastapi-transport" in out
 
+
+def test_cli_help_flag_shows_github(capsys: pytest.CaptureFixture) -> None:
+    with pytest.raises(SystemExit) as ei:
+        cli_main(["--help"])
+    assert ei.value.code == 0
+    out = capsys.readouterr().out
+    assert "https://github.com/senia-glitch/fastapi-transport" in out
+    assert "init" in out
 # ---------------------------------------------------------------------------
 # init
 # ---------------------------------------------------------------------------
