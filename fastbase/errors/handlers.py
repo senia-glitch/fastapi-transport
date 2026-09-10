@@ -38,14 +38,16 @@ def _error_response(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status,
-        content={
-            "success": False,
-            "error": {
-                "code": code,
-                "message": message,
-                "details": details,
-            },
-        },
+        content=jsonable_encoder(
+            {
+                "success": False,
+                "error": {
+                    "code": code,
+                    "message": message,
+                    "details": details,
+                },
+            }
+        ),
         headers=headers,
     )
 

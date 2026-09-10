@@ -318,3 +318,23 @@ def test_check_fails_when_app_attribute_missing(
     out = capsys.readouterr().out
     assert rc == 1
     assert "no 'app' attribute" in out
+
+
+def test_init_recognizes_marker_with_bom(
+    capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A file starting with a UTF-8 BOM must still be recognized as generated."""
+    monkeypatch.chdir(tmp_path)
+    main_init()
+    p = tmp_path / "app" / "main.py"
+    # rewrite with a BOM + marker + dummy content
+    p.write_text(
+        "\ufeff# fastbase: generated\n# placeholder\n",
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+    rc = main_init(force=True)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "overwrite:" in out
+    assert "def main" in p.read_text(encoding="utf-8-sig")

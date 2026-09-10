@@ -33,7 +33,7 @@ ROOT_FILES: list[tuple[str, str]] = [
 
 def _has_marker(path: Path) -> bool:
     try:
-        head = path.read_text(encoding="utf-8").splitlines()[:5]
+        head = path.read_text(encoding="utf-8-sig").splitlines()[:5]
     except OSError:
         return False
     return any(line.startswith(GENERATED_MARKER) for line in head)

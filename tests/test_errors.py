@@ -266,3 +266,45 @@ def test_unhandled_exception_returns_500_and_hides_traceback(
     assert "boom-secret-marker" not in r.text
     assert "RuntimeError" not in r.text
     assert any("Unhandled exception" in rec.message for rec in caplog.records)
+
+
+def test_domain_error_details_serializable_via_jsonable_encoder() -> None:
+    """`details` may contain datetime, set, Enum, pydantic — must not 500."""
+    import enum
+    from datetime import datetime
+
+    from pydantic import BaseModel
+
+    class Status(enum.Enum):
+        ACTIVE = "active"
+
+    class Payload(BaseModel):
+        id: int
+
+    app = _app_with_handlers()
+
+    @app.get("/rich")
+    async def rich() -> None:
+        raise NotFoundError(
+            message="Rich details",
+            details={
+                "when": datetime(2026, 1, 1, 12, 0, 0),
+                "tags": {"a", "b"},
+                "status": Status.ACTIVE,
+                "payload": Payload(id=7),
+            },
+        )
+
+    r = _client(app).get("/rich")
+    assert r.status_code == 404
+    body = r.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == 3001
+    # datetime → ISO string
+    assert body["error"]["details"]["when"].startswith("2026-01-01")
+    # set → list (order not guaranteed)
+    assert sorted(body["error"]["details"]["tags"]) == ["a", "b"]
+    # Enum → value
+    assert body["error"]["details"]["status"] == "active"
+    # pydantic → dict
+    assert body["error"]["details"]["payload"] == {"id": 7}
