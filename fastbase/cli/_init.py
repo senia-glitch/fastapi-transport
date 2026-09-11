@@ -6,6 +6,8 @@ Rules:
   - Files without the marker are user code and are never touched.
   - `.env.fastbase` and `pyproject.toml` live in the current working
     directory (project root). `pyproject.toml` is never overwritten.
+  - `docs/*.md` are generated once and never overwritten (they become
+    the project's own documentation).
 """
 
 import shutil
@@ -28,6 +30,14 @@ PACKAGE_STRUCTURE: list[tuple[str, str]] = [
 
 ROOT_FILES: list[tuple[str, str]] = [
     ("env.fastbase.tmpl", ".env.fastbase"),
+]
+
+# (template filename, relative path inside the docs/ directory)
+DOCS_FILES: list[tuple[str, str]] = [
+    ("event-infra.md.tmpl", "event-infra.md"),
+    ("core-package.md.tmpl", "core-package.md"),
+    ("fastbase.md.tmpl", "fastbase.md"),
+    ("full-stack.md.tmpl", "full-stack.md"),
 ]
 
 
@@ -54,6 +64,18 @@ def _write_file(src: Path, dst: Path, *, force: bool) -> str:
         return "skip"
     shutil.copyfile(src, dst)
     return "overwrite"
+
+
+def _write_docs(src: Path, dst: Path) -> str:
+    """Docs are generated once and never overwritten.
+
+    Returns "created" or "skip".
+    """
+    if dst.exists():
+        return "skip"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dst)
+    return "created"
 
 
 def _write_pyproject(src: Path, dst: Path) -> str:
@@ -123,6 +145,14 @@ def main_init(*, path: str = "app", force: bool = False) -> int:
             TEMPLATES_DIR / "pyproject.toml.tmpl", cwd / "pyproject.toml"
         )
         rows.append((pyproject_status, "pyproject.toml"))
+
+        docs_dir = cwd / "docs"
+        docs_template_dir = TEMPLATES_DIR / "docs"
+        for tmpl_name, rel in DOCS_FILES:
+            src = docs_template_dir / tmpl_name
+            dst = docs_dir / rel
+            status = _write_docs(src, dst)
+            rows.append((status, f"docs/{rel}"))
     except OSError as e:
         print(f"error: {e}")
         return 1
@@ -136,4 +166,6 @@ def main_init(*, path: str = "app", force: bool = False) -> int:
     print("  1. pip install -r requirements.txt")
     print("  2. Edit .env.fastbase")
     print("  3. python -m app.main")
+    print()
+    print("Связка с core-package и event-infra — см. docs/full-stack.md")
     return 0

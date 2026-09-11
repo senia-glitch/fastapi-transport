@@ -1,0 +1,297 @@
+# Полный стек: event-infra + core-package + fastbase
+
+Связка трёх пакетов даёт полноценный бэкенд:
+HTTP-запрос
+│
+▼
+fastbase (роут + FastAPI)
+│ run("scenario", dto)
+▼
+core-package (сценарий)
+│ self._db.create(...)
+▼
+адаптер EventInfraDatabaseAdapter
+│
+▼
+event-infra (EventRouter)
+│
+▼
+PostgreSQL
+
+text
+
+**Роли:**
+
+- **fastbase** — HTTP-транспорт, роуты, middleware, единый конверт ошибок. Читает `.env.fastbase`.
+- **core-package** — бизнес-логика в сценариях, DI, JWT/bcrypt/утилиты. Читает `.core-package.env` (можно не создавать).
+- **event-infra** — БД: пулы соединений, очереди, миграции, CRUD. Читает `.infra.env`.
+
+Подробно о каждом — в [event-infra.md](./event-infra.md), [core-package.md](./core-package.md), [fastbase.md](./fastbase.md).
+
+---
+
+## Быстрый старт
+
+Открой терминал в пустой папке и выполни:
+
+```powershell
+# 1. Виртуальное окружение
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# 2. Установка всех трёх пакетов одной командой
+pip install "fastbase[full] @ git+https://github.com/senia-glitch/fastapi-transport.git"
+
+# 3. Генерация структуры (три команды — по одной на каждый пакет)
+fb init
+infra-init
+core-init --target-dir app
+
+# 4. Правки конфигов (см. ниже)
+#    .env.fastbase  →  FAT_INTEGRATIONS=core,event-infra
+#                     FAT_CORE_DISCOVER=app.scenarios
+#    .infra.env     →  DB_URL=... / DB_URL_ASYNC=...
+
+# 5. Запуск
+python -m app.main
+Сервер поднимется на http://127.0.0.1:8000, OpenAPI — на /docs.
+
+Что где лежит
+text
+my_project/
+├── app/                           ← от fb init и core-init
+│   ├── main.py                    ← make_app() + start()
+│   ├── api/v1/routes/             ← роуты fastbase
+│   ├── core/config.py             ← Settings(BaseAppSettings)
+│   ├── scenarios/                 ← сценарии core-package
+│   ├── schemas/                   ← pydantic-схемы
+│   └── ...
+├── models.py                      ← от infra-init: SQLModel-модели (источник истины)
+├── alembic/                       ← от infra-init: миграции
+├── run_infrastructure.py          ← от infra-init
+├── .env.fastbase                  ← настройки API и интеграций
+├── .infra.env                     ← настройки БД, пулов, retry, кеша
+├── .core-package.env              ← опционально: JWT/bcrypt/логи
+└── docs/                          ← эта документация
+Кто за что отвечает:
+
+models.py — всегда источник истины о схеме БД. Добавил модель → перезапустил → миграция создалась.
+
+app/scenarios/ — только бизнес-логика. Сценарий не знает про HTTP.
+
+app/api/v1/routes/ — только транспорт. Роут вызывает run("scenario", dto) и возвращает результат.
+
+Конфиги — три файла, каждый отвечает за свой слой.
+
+Минимальный рабочий пример
+1. Модель БД — models.py
+python
+from typing import Optional
+from datetime import datetime
+
+from sqlmodel import SQLModel, Field
+
+metadata = SQLModel.metadata
+
+
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(max_length=50, unique=True)
+    email: str = Field(max_length=255, unique=True)
+    created_at: Optional[datetime] = Field(default_factory=datetime.now)
+
+
+def get_all_schemas():
+    import sys
+    module = sys.modules[__name__]
+    schemas = {}
+    for attr_name in dir(module):
+        attr = getattr(module, attr_name)
+        if (
+            isinstance(attr, type) and
+            issubclass(attr, SQLModel) and
+            attr != SQLModel and
+            hasattr(attr, '__table__')
+        ):
+            schemas[attr.__tablename__] = attr
+    return schemas
+2. Сценарий — app/scenarios/register_user.py
+python
+from pydantic import BaseModel
+
+from core import (
+    BaseScenario,
+    ValidationError,
+    register_scenario,
+    tracked_scenario,
+)
+
+
+class RegisterUserDTO(BaseModel):
+    username: str
+    email: str
+
+
+class RegisterUserResult(BaseModel):
+    user_id: int
+    username: str
+    email: str
+
+
+@register_scenario("register_user")
+@tracked_scenario("register_user")
+class RegisterUserScenario(BaseScenario):
+    async def execute(self, dto: RegisterUserDTO) -> RegisterUserResult:
+        if "@" not in dto.email:
+            raise ValidationError("email is invalid")
+
+        rows = await self._db.custom(
+            "SELECT id FROM users WHERE username = :u",
+            {"u": dto.username},
+        )
+        if rows:
+            raise ValidationError(f"username '{dto.username}' already exists")
+
+        user = await self._db.create("users", {
+            "username": dto.username,
+            "email": dto.email,
+        })
+        return RegisterUserResult(
+            user_id=user["id"],
+            username=user["username"],
+            email=user["email"],
+        )
+3. Роут — app/api/v1/routes/users.py
+python
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+from core import run
+from app.scenarios.register_user import RegisterUserDTO
+
+router = APIRouter(tags=["users"])
+
+
+class CreateUserRequest(BaseModel):
+    username: str
+    email: str
+
+
+@router.post("/users", summary="Создать пользователя")
+async def create_user(req: CreateUserRequest) -> dict:
+    result = await run(
+        "register_user",
+        RegisterUserDTO(username=req.username, email=req.email),
+    )
+    return result.model_dump()
+4. Конфиги
+.env.fastbase:
+
+env
+FAT_TITLE=My API
+FAT_INTEGRATIONS=core,event-infra
+FAT_CORE_DISCOVER=app.scenarios
+.infra.env (только строки подключения):
+
+env
+DB_URL=postgresql://postgres:123@localhost:5432/my_project
+DB_URL_ASYNC=postgresql+asyncpg://postgres:123@localhost:5432/my_project
+5. Запуск
+powershell
+python -m app.main
+При первом запуске:
+
+event-infra применит миграции к БД (создаст таблицу users).
+
+core-package поднимет ядро и загрузит сценарий register_user.
+
+fastbase соберёт app, найдёт роут users и health, запустит uvicorn.
+
+Открой http://127.0.0.1:8000/docs — увидишь POST /api/v1/users и GET /api/v1/health.
+
+Сделай запрос через /docs (Try it out):
+
+json
+{"username": "alice", "email": "alice@test.local"}
+Ожидаемый ответ: {"user_id":1,"username":"alice","email":"alice@test.local"}.
+
+Повтори с тем же username — увидишь конверт ошибки:
+
+json
+{
+  "success": false,
+  "error": {
+    "code": 3002,
+    "message": "username 'alice' already exists",
+    "details": null
+  }
+}
+Что делает каждая команда
+Команда	Что делает	Источник
+pip install "fastbase[full] @ git+..."	Ставит три пакета и все зависимости	fastbase.md
+fb init	Создаёт app/, .env.fastbase, docs/	fastbase.md
+infra-init	Создаёт models.py, .infra.env, alembic/	event-infra.md
+core-init --target-dir app	Создаёт app/scenarios/, app/interfaces/, app/utils/	core-package.md
+python -m app.main	Запускает стек: миграции → core → uvicorn	—
+Что менять, что не менять
+Меняй:
+
+models.py — под свою предметную область.
+
+app/scenarios/*.py — своя бизнес-логика.
+
+app/api/v1/routes/*.py — свои роуты.
+
+.env.fastbase, .infra.env — свои креды, порты, размеры пулов.
+
+Не меняй (если не уверен):
+
+app/main.py — точка входа уже готова.
+
+alembic/ — управляется автоматически через infra-init и event-infra.
+
+docs/ — можно править, но при следующем fb init они не перезапишутся.
+
+Удаляй, если не нужно:
+
+app/examples/ — примеры от core-package, если не пригодятся.
+
+.core-package.env — если хочется держать все настройки в .env.fastbase.
+
+Типовые ошибки
+Симптом	Причина	Решение
+ImportError: fastbase requires core-package	Установлен только fastbase	pip install "fastbase[full]"
+404 Not Found на свой роут	router не найден в модуле	Проверь имя атрибута: router: APIRouter
+Сценарий не находится (Scenario 'x' not registered)	FAT_CORE_DISCOVER пуст или не тот пакет	Проверь .env.fastbase: FAT_CORE_DISCOVER=app.scenarios
+Миграции не применяются	Неверный DB_URL в .infra.env	Проверь подключение psql'ом вручную
+start_core() уже запущено	Повторный запуск ядра в одном процессе	Для тестов есть reset_core()
+Ошибка из сценария возвращается как 500	Не установлен install_core_handlers	Проверь FAT_INTEGRATIONS=core,event-infra
+Validation failed вместо username уже существует	CoreError не поймался	То же самое — проверь FAT_INTEGRATIONS
+Остановка
+Ctrl+C в консоли, где запущен python -m app.main. В логах увидишь:
+
+text
+fastbase.integrations.core: Shutting down integrations...
+fastbase.integrations.core: Integrations shut down.
+INFO:     Application shutdown complete.
+Это значит:
+
+core-package сбросил состояние (reset_core()).
+
+event-infra закрыл пулы соединений (router.shutdown()).
+
+uvicorn завершил процесс.
+
+Что дальше
+Добавить модель — отредактируй models.py, перезапусти. Миграция создастся автоматически.
+
+Добавить сценарий — создай файл в app/scenarios/ с @register_scenario("имя"). Он подхватится при старте.
+
+Добавить роут — создай файл в app/api/v1/routes/ с router = APIRouter(). Он подхватится автоматически.
+
+Добавить канал БД — в .infra.env: CHANNELS=read,write,admin,report плюс REPORT_POOL_SIZE и т.д.
+
+Настроить кеш/retry — все параметры уже в .infra.env и .env.fastbase.
+
+Подробности — в трёх соседних файлах документации.

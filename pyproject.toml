@@ -38,7 +38,10 @@ include = ["fastbase*"]
 exclude = ["tests*"]
 
 [tool.setuptools.package-data]
-"fastbase.cli" = ["templates/*.tmpl"]
+"fastbase.cli" = [
+    "templates/*.tmpl",
+    "templates/docs/*.tmpl",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -53,3 +56,4 @@ omit = ["fastbase/cli/templates/*"]
 
 [tool.coverage.report]
 show_missing = true
+

@@ -119,6 +119,18 @@ def test_cli_help_flag_shows_github(capsys: pytest.CaptureFixture) -> None:
 # init
 # ---------------------------------------------------------------------------
 
+def test_init_creates_docs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`fb init` создаёт четыре файла документации в docs/."""
+    monkeypatch.chdir(tmp_path)
+    rc = main_init()
+    assert rc == 0
+
+    docs = tmp_path / "docs"
+    assert docs.is_dir()
+    for name in ["event-infra.md", "core-package.md", "fastbase.md", "full-stack.md"]:
+        assert (docs / name).exists(), name
 
 def test_init_creates_all_files(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
