@@ -118,3 +118,72 @@ def test_log_format_literal_validation(
     monkeypatch.setenv("FAT_LOG_FORMAT", "xml")
     with pytest.raises(ValidationError):
         BaseAppSettings()
+
+
+# ---------------------------------------------------------------------------
+# New fields: routes_package / integrations / core_discover
+# ---------------------------------------------------------------------------
+
+
+def test_routes_package_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _clear_fat_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    s = BaseAppSettings()
+    assert s.routes_package == "app.api.v1.routes"
+
+
+def test_routes_package_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _clear_fat_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FAT_ROUTES_PACKAGE", "svc.routes")
+    s = BaseAppSettings()
+    assert s.routes_package == "svc.routes"
+
+
+def test_integrations_default_empty(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _clear_fat_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    s = BaseAppSettings()
+    assert s.integrations == ""
+    assert s.integrations_list == []
+
+
+def test_integrations_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _clear_fat_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FAT_INTEGRATIONS", "core,event-infra")
+    s = BaseAppSettings()
+    assert s.integrations_list == ["core", "event-infra"]
+
+
+def test_integrations_list_tolerates_spaces(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _clear_fat_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FAT_INTEGRATIONS", " core , event-infra ")
+    s = BaseAppSettings()
+    assert s.integrations_list == ["core", "event-infra"]
+
+
+def test_integrations_list_empty_string(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _clear_fat_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FAT_INTEGRATIONS", "")
+    s = BaseAppSettings()
+    assert s.integrations_list == []
+
+
+def test_core_discover_default_none(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _clear_fat_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    s = BaseAppSettings()
+    assert s.core_discover is None
+
+
+def test_core_discover_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _clear_fat_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FAT_CORE_DISCOVER", "myapp.scenarios")
+    s = BaseAppSettings()
+    assert s.core_discover == "myapp.scenarios"

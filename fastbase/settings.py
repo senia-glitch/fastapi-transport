@@ -29,6 +29,15 @@ class BaseAppSettings(BaseSettings):
     description: str = ""
     api_prefix: str = "/api/v1"
 
+    # --- Routes ---
+    routes_package: str = "app.api.v1.routes"
+
+    # --- Integrations ---
+    # ""                 — only fastbase
+    # "core,event-infra" — full stack
+    integrations: str = ""
+    core_discover: str | None = None
+
     # --- Docs ---
     docs_url: str | None = "/docs"
     openapi_url: str | None = "/openapi.json"
@@ -57,3 +66,11 @@ class BaseAppSettings(BaseSettings):
     root_path: str = ""
     app_path: str = "app.main:app"
     env_file: str | None = None
+
+    @property
+    def integrations_list(self) -> list[str]:
+        """Parse FAT_INTEGRATIONS into a sorted list of names."""
+        raw = (self.integrations or "").strip()
+        if not raw:
+            return []
+        return [x.strip() for x in raw.split(",") if x.strip()]

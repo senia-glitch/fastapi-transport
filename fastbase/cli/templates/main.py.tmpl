@@ -1,30 +1,13 @@
 # fastbase: generated
-"""Точка входа приложения."""
+"""Точка входа приложения.
 
-from fastapi import FastAPI
+Всё поведение настраивается через .env.fastbase (префикс FAT_).
+"""
 
-from fastbase import create_app, run_api
+from fastbase import make_app, start
 
-from app.core.config import settings
-from app.api.v1.routes import health
-
-
-def build() -> FastAPI:
-    return create_app(
-        settings=settings,
-        routers=[
-            health.router,
-            # подключайте свои роутеры здесь
-        ],
-    )
-
-
-app = build()
-
-
-def main() -> None:
-    run_api("app.main:app")
+app = make_app()
 
 
 if __name__ == "__main__":
-    main()
+    start()

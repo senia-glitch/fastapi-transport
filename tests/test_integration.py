@@ -1,11 +1,4 @@
-"""End-to-end integration tests: init → import → TestClient.
-
-These tests exercise the full happy path:
-    1. `fastbase init` in an empty temp directory;
-    2. import the generated `app.main:app`;
-    3. hit real endpoints through TestClient;
-    4. verify the escape hatch (drop-in bare FastAPI).
-"""
+"""End-to-end integration tests: init → import → TestClient."""
 
 import sys
 from pathlib import Path
@@ -14,7 +7,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from fastbase import health_router
 from fastbase.cli._init import main_init
 
 
@@ -40,11 +32,6 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         except ValueError:
             pass
         _purge_app_modules()
-
-
-# ---------------------------------------------------------------------------
-# Happy path
-# ---------------------------------------------------------------------------
 
 
 def test_generated_project_serves_health(project: Path) -> None:
@@ -75,7 +62,6 @@ def test_generated_project_request_id_header(project: Path) -> None:
 
 
 def test_generated_project_unknown_route_uses_envelope(project: Path) -> None:
-    """A 404 from the router goes through our HTTPException handler."""
     from app.main import app as user_app
 
     with TestClient(user_app) as client:
@@ -90,16 +76,26 @@ def test_generated_project_settings_subclass(project: Path) -> None:
     from app.core.config import Settings, settings
 
     assert isinstance(settings, Settings)
-    # Repo's .env.fastbase defaults applied.
     assert settings.api_prefix == "/api/v1"
 
 
+def test_generated_main_uses_make_app(project: Path) -> None:
+    """The generated main.py must use make_app / start, not create_app / run_api."""
+    src = (project / "app" / "main.py").read_text(encoding="utf-8")
+    assert "make_app" in src
+    assert "start" in src
+    assert "create_app" not in src
+    assert "run_api" not in src
+
+
 # ---------------------------------------------------------------------------
-# Escape hatch: bare FastAPI + our router works without create_app
+# Escape hatch: bare FastAPI still works
 # ---------------------------------------------------------------------------
 
 
 def test_escape_hatch_plain_fastapi_with_health_router() -> None:
+    from fastbase import health_router
+
     raw = FastAPI()
     raw.include_router(health_router, prefix="/api/v1")
     with TestClient(raw) as client:
@@ -109,7 +105,6 @@ def test_escape_hatch_plain_fastapi_with_health_router() -> None:
 
 
 def test_escape_hatch_plain_fastapi_only() -> None:
-    """A bare FastAPI app works without importing anything from fastbase."""
     raw = FastAPI()
 
     @raw.get("/ping")

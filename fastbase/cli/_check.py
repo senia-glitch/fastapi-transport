@@ -25,6 +25,13 @@ def _clear_app_modules() -> None:
             del sys.modules[name]
 
 
+def _clear_routes_modules(package: str) -> None:
+    prefix = package + "."
+    for name in list(sys.modules):
+        if name == package or name.startswith(prefix):
+            del sys.modules[name]
+
+
 def main_check() -> int:
     cwd = Path.cwd()
     results: list[tuple[str, str]] = []
@@ -41,7 +48,7 @@ def main_check() -> int:
     try:
         settings = BaseAppSettings()
         results.append(("ok", "BaseAppSettings loaded"))
-    except Exception as e:  # pragma: no cover - defensive
+    except Exception as e:  # pragma: no cover — defensive
         results.append(("fail", f"BaseAppSettings: {e}"))
 
     # 3. app.main:app import
@@ -63,23 +70,35 @@ def main_check() -> int:
                 pass
             _clear_app_modules()
 
-    # 4. routers declared but not referenced in main.py
-    main_py = cwd / "app" / "main.py"
-    routes_dir = cwd / "app" / "api" / "v1" / "routes"
-    if main_py.exists() and routes_dir.exists():
-        main_src = main_py.read_text(encoding="utf-8")
-        for f in sorted(routes_dir.glob("*.py")):
-            if f.name == "__init__.py":
-                continue
-            text = f.read_text(encoding="utf-8")
-            if "router" not in text:
-                continue
-            if f.stem not in main_src:
-                results.append(
-                    ("warn", f"router '{f.stem}' not referenced in main.py")
-                )
+    # 4. FAT_ROUTES_PACKAGE importable
+    if settings is not None and settings.routes_package:
+        sys.path.insert(0, str(cwd))
+        _clear_routes_modules(settings.routes_package)
+        try:
+            importlib.import_module(settings.routes_package)
+            results.append(
+                ("ok", f"FAT_ROUTES_PACKAGE '{settings.routes_package}' imports")
+            )
+        except Exception as e:
+            results.append(
+                ("fail", f"FAT_ROUTES_PACKAGE '{settings.routes_package}': {e}")
+            )
+        finally:
+            try:
+                sys.path.remove(str(cwd))
+            except ValueError:
+                pass
+            _clear_routes_modules(settings.routes_package)
 
-    # 5. duplicate prefixes in main.py
+    # 5. FAT_INTEGRATIONS valid
+    if settings is not None:
+        try:
+            _ = settings.integrations_list
+        except Exception as e:  # pragma: no cover
+            results.append(("fail", f"FAT_INTEGRATIONS: {e}"))
+
+    # 6. duplicate prefixes in main.py (kept — useful if user mounts manually)
+    main_py = cwd / "app" / "main.py"
     if main_py.exists():
         main_src = main_py.read_text(encoding="utf-8")
         prefixes = re.findall(r"prefix\s*=\s*['\"]([^'\"]+)['\"]", main_src)
@@ -89,7 +108,7 @@ def main_check() -> int:
                 results.append(("warn", f"duplicate prefix: {p}"))
             seen.add(p)
 
-    # 6. reload + workers conflict
+    # 7. reload + workers conflict
     if settings is not None and settings.reload and settings.workers > 1:
         results.append(
             (

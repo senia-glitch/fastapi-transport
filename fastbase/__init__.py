@@ -1,9 +1,15 @@
 """fastbase — thin infrastructure over FastAPI for a uniform API layer.
 
-Public API is re-exported here. Importing this module has no side effects.
+Public API:
+  - make_app / start      — single entry point for the project.
+  - BaseAppSettings       — settings model (subclass to add your own fields).
+  - exception classes     — subclass to define domain errors.
+  - install_exception_handlers — for those building FastAPI by hand.
+  - AccessLogMiddleware, RequestIdMiddleware, health_router — building blocks.
+
+Importing this module has no side effects.
 """
 
-from fastbase.app import create_app
 from fastbase.errors import (
     BaseHTTPError,
     ConflictError,
@@ -16,11 +22,16 @@ from fastbase.errors import (
 )
 from fastbase.middleware import AccessLogMiddleware, RequestIdMiddleware
 from fastbase.routing import health_router
-from fastbase.runner import run_api
 from fastbase.settings import BaseAppSettings
+from fastbase.startup import make_app, start
 
 __all__ = [
-    "create_app",
+    # entry point
+    "make_app",
+    "start",
+    # settings
+    "BaseAppSettings",
+    # exceptions
     "BaseHTTPError",
     "NotFoundError",
     "ValidationError",
@@ -29,11 +40,10 @@ __all__ = [
     "ForbiddenError",
     "InternalError",
     "install_exception_handlers",
-    "RequestIdMiddleware",
+    # building blocks
     "AccessLogMiddleware",
+    "RequestIdMiddleware",
     "health_router",
-    "run_api",
-    "BaseAppSettings",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

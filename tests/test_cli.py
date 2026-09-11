@@ -164,7 +164,7 @@ def test_init_force_overwrites_generated(
     assert rc == 0
     out = capsys.readouterr().out
     assert "overwrite:" in out
-    assert "def main" in p.read_text(encoding="utf-8")
+    assert "make_app" in p.read_text(encoding="utf-8")
 
 
 def test_init_does_not_touch_user_code(
@@ -230,26 +230,6 @@ def test_check_after_init_ok(
     out = capsys.readouterr().out
     assert rc == 0, out
     assert "fail:" not in out
-
-
-def test_check_warns_router_not_referenced(
-    capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    main_init()
-    extra = tmp_path / "app" / "api" / "v1" / "routes" / "extra.py"
-    extra.write_text(
-        "# fastbase: generated\n"
-        "from fastapi import APIRouter\n"
-        "router = APIRouter()\n",
-        encoding="utf-8",
-    )
-    capsys.readouterr()
-    _clear_app_modules()
-    main_check()
-    out = capsys.readouterr().out
-    assert "warn:" in out
-    assert "extra" in out
 
 
 def test_check_warns_duplicate_prefix(
@@ -320,6 +300,22 @@ def test_check_fails_when_app_attribute_missing(
     assert "no 'app' attribute" in out
 
 
+def test_check_fails_when_routes_package_missing(
+    capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    main_init()
+    (tmp_path / ".env.fastbase").write_text(
+        "FAT_ROUTES_PACKAGE=does.not.exist\n", encoding="utf-8"
+    )
+    capsys.readouterr()
+    _clear_app_modules()
+    rc = main_check()
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "FAT_ROUTES_PACKAGE" in out
+
+
 def test_init_recognizes_marker_with_bom(
     capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -327,7 +323,6 @@ def test_init_recognizes_marker_with_bom(
     monkeypatch.chdir(tmp_path)
     main_init()
     p = tmp_path / "app" / "main.py"
-    # rewrite with a BOM + marker + dummy content
     p.write_text(
         "\ufeff# fastbase: generated\n# placeholder\n",
         encoding="utf-8",
@@ -337,4 +332,4 @@ def test_init_recognizes_marker_with_bom(
     assert rc == 0
     out = capsys.readouterr().out
     assert "overwrite:" in out
-    assert "def main" in p.read_text(encoding="utf-8-sig")
+    assert "make_app" in p.read_text(encoding="utf-8-sig")

@@ -2,123 +2,149 @@
 
 Тонкая инфраструктура поверх FastAPI для быстрого и единообразного построения транспортного (API) слоя приложения.
 
-Пакет — фасад для типового: короткий boilerplate, единый формат ошибок, готовая структура проекта. Для нетипового — escape hatch в голый FastAPI.
+Пакет — фасад для типового: короткий boilerplate, единый формат ошибок, автозагрузка роутеров, готовые интеграции. Для нетипового — escape hatch в голый FastAPI.
 
 - Python ≥ 3.11, FastAPI ≥ 0.110, pydantic ≥ 2.5, pydantic-settings ≥ 2.1, uvicorn ≥ 0.27.
 - Зависимости — только FastAPI и его экосистема. Никаких сторонних библиотек, включая CLI (stdlib argparse).
 - API-слой не содержит бизнес-логику: она подключается снаружи через `Depends`.
+- Всё поведение — через переменные окружения (префикс `FAT_`, файл `.env.fastbase`).
 
 ---
 
 ## Установка
 
 ```bash
+# Только fastbase
 pip install git+https://github.com/senia-glitch/fastapi-transport.git
-```
 
-Установка для разработки самого пакета:
+# fastbase + core-package + event-infra (для интеграций)
+pip install "fastbase[full] @ git+https://github.com/senia-glitch/fastapi-transport.git"
 
-```bash
-git clone https://github.com/senia-glitch/fastapi-transport.git
-cd fastapi-transport
-pip install -e ".[dev]"
-```
-
----
-
-## Quickstart
-
-```bash
+# Разработка
+pip install "fastbase[dev] @ git+https://github.com/senia-glitch/fastapi-transport.git"
+Quickstart
+bash
 # 1. Сгенерировать структуру проекта в текущей папке
-fastapi-transport init
+fb init
 
 # 2. Отредактировать .env.fastbase (при необходимости)
 
 # 3. Запустить приложение
 python -m app.main
-```
+Откройте http://127.0.0.1:8000/docs.
 
-Откройте <http://127.0.0.1:8000/docs>.
+Три команды — и рабочий API. Точка входа app/main.py уже собрана: авто-загрузка роутеров, обработчики ошибок, middleware — на месте.
 
-Три команды — и рабочий API. Точка входа `app/main.py` уже собрана: роутинг, обработчики ошибок, middleware — на месте.
+Единственный способ запуска
+python
+# app/main.py
+from fastbase import make_app, start
 
----
+app = make_app()
 
-## Что генерирует `init`
+if __name__ == "__main__":
+    start()
+Никаких аргументов, никаких вариантов. Всё поведение читается из .env.fastbase.
 
-```
-app/
-├── main.py                     # точка входа: create_app() + run_api()
-├── core/
-│   ├── config.py               # Settings(BaseAppSettings) — ваши поля
-│   ├── exceptions.py           # доменные исключения (наследники от fastbase)
-│   └── env.py                  # путь к .env.fastbase, если нужно явно
-├── api/
-│   ├── v1/
-│   │   ├── routes/
-│   │   │   └── health.py       # health-check (пример роутера)
-│   │   └── dependencies.py     # провайдеры Depends
-│   └── handlers.py             # дополнительные exception handlers
-├── schemas/
-│   └── example.py              # пример pydantic-схемы
-├── .env.fastbase               # настройки пакета (префикс FAT_)
-└── pyproject.toml              # создаётся, только если его ещё нет
-```
+make_app() — собирает FastAPI по env. Возвращает app. Используй для тестов, интеграции с TestClient, а также для ASGI-режима (uvicorn app.main:app).
 
-Правила генератора:
+start() — запускает uvicorn с параметрами из env. Блокирует процесс.
 
-- каждый созданный файл начинается с маркера `# fastbase: generated`;
-- файлы без маркера **никогда** не перезаписываются;
-- файлы с маркером перезаписываются только при `--force`;
-- `.env.fastbase` кладётся в корень (там, где запущен `init`);
-- существующий `pyproject.toml` не трогается;
-- после работы печатается дерево и next steps.
+Для --reload и --workers > 1 (uvicorn требует import-string) — используйте штатные переменные FAT_RELOAD и FAT_WORKERS. start() подхватит их и передаст в uvicorn. При этом app должен быть определён на уровне модуля — что и делается через make_app().
 
----
+Конфигурация
+Все настройки читаются через pydantic-settings. Префикс — FAT_. Файл по умолчанию — .env.fastbase. Реальные env-переменные побеждают значения из файла.
 
-## Конфигурация
+API
+Переменная	Тип	Дефолт	Описание
+FAT_TITLE	str	API	Заголовок OpenAPI.
+FAT_VERSION	str	0.0.0	Версия в OpenAPI.
+FAT_DESCRIPTION	str	``	Описание OpenAPI.
+FAT_API_PREFIX	str	/api/v1	Префикс, под который монтируются все роутеры.
+Routes
+Переменная	Тип	Дефолт	Описание
+FAT_ROUTES_PACKAGE	str	app.api.v1.routes	Пакет с роутерами для авто-сборки.
+Контракт модуля роутера:
 
-Все настройки читаются через pydantic-settings. Префикс — `FAT_`. Файл по умолчанию — `.env.fastbase`. Реальные env-переменные **побеждают** значения из файла.
+python
+# app/api/v1/routes/users.py
+from fastapi import APIRouter
 
-| Переменная | Тип | Дефолт | Описание |
-|---|---|---|---|
-| `FAT_TITLE` | str | `API` | Заголовок OpenAPI. |
-| `FAT_VERSION` | str | `0.0.0` | Версия в OpenAPI. |
-| `FAT_DESCRIPTION` | str | `` | Описание OpenAPI. |
-| `FAT_API_PREFIX` | str | `/api/v1` | Префикс, под который монтируются все роутеры. |
-| `FAT_DOCS_URL` | str \| null | `/docs` | URL Swagger UI. `null` — выключить. |
-| `FAT_OPENAPI_URL` | str \| null | `/openapi.json` | URL OpenAPI-схемы. |
-| `FAT_REDOC_URL` | str \| null | `/redoc` | URL ReDoc. |
-| `FAT_REQUEST_ID_ENABLED` | bool | `true` | Включить `RequestIdMiddleware`. |
-| `FAT_REQUEST_ID_HEADER` | str | `X-Request-ID` | Имя заголовка для request-id. |
-| `FAT_LOG_LEVEL` | str | `info` | Уровень логирования пакета. |
-| `FAT_LOG_FORMAT` | `plain` \| `json` | `plain` | Формат лог-записей. |
-| `FAT_ACCESS_LOG` | bool | `true` | Включить `AccessLogMiddleware`. |
-| `FAT_ERROR_CODES` | JSON `{str: int}` | `{}` | Переопределение числовых кодов. |
-| `FAT_ERROR_CODE_FALLBACK` | int | `3500` | Код для нераспознанных исключений. |
-| `FAT_HOST` | str | `127.0.0.1` | Хост uvicorn. |
-| `FAT_PORT` | int | `8000` | Порт uvicorn. |
-| `FAT_RELOAD` | bool | `false` | Uvicorn reload. При `true` форсит `workers=1`. |
-| `FAT_WORKERS` | int | `1` | Количество воркеров. |
-| `FAT_BACKLOG` | int | `2048` | Backlog uvicorn. |
-| `FAT_TIMEOUT_KEEP_ALIVE` | int | `5` | Keep-alive timeout. |
-| `FAT_ROOT_PATH` | str | `` | ASGI root_path (за прокси). |
-| `FAT_APP_PATH` | str | `app.main:app` | Import string приложения. |
-| `FAT_ENV_FILE` | str \| null | `null` | Опциональный env-файл для uvicorn. |
+router = APIRouter(tags=["users"])   # обязательный атрибут
 
-### `FAT_ERROR_CODES`
+@router.get("/")
+async def list_users(): ...
+Опционально — prefix: str на уровне модуля:
 
-Значение — JSON-объект «имя класса исключения → целое число». Пример в `.env.fastbase`:
+python
+# app/api/v1/routes/admin.py
+from fastapi import APIRouter
 
-```dotenv
-FAT_ERROR_CODES={"UserNotFoundError": 2001, "PaymentFailed": 2002}
-```
+prefix = "/admin"           # прибавится к FAT_API_PREFIX
+router = APIRouter(tags=["admin"])
 
-Домены можно разделять по диапазонам: `2xxx` — ваш домен, `3xxx` — зарезервировано за пакетом (обёртки над ошибками FastAPI).
+@router.get("/stats")
+async def stats(): ...
+Итоговый путь: {FAT_API_PREFIX}{module_prefix}{path}.
 
-Пользовательские поля в наследнике `BaseAppSettings` тоже читаются из env — просто с тем же префиксом `FAT_`:
+Правила сканера:
 
-```python
+модули с _ в начале — пропускаются;
+
+модуль без router: APIRouter — пропускается;
+
+ошибка импорта модуля — warning, продолжаем;
+
+если ни один роутер не найден — монтируется только health_router (warning).
+
+Integrations
+Переменная	Тип	Дефолт	Описание
+FAT_INTEGRATIONS	str	``	Пусто или core,event-infra.
+FAT_CORE_DISCOVER	str | null	null	Пакет со сценариями core-package.
+Если FAT_INTEGRATIONS=core,event-infra, при старте приложения:
+
+start_infrastructure() — поднимается event-infra, применяются миграции;
+
+start_core(router=router, discover=FAT_CORE_DISCOVER) — поднимается core-package;
+
+Регистрируется обработчик core.exceptions.CoreError — ошибки core автоматически конвертируются в единый конверт fastbase.
+
+На shutdown — обратный порядок: reset_core() → router.shutdown().
+
+Требуется pip install "fastbase[full]".
+
+Docs
+Переменная	Тип	Дефолт	Описание
+FAT_DOCS_URL	str | null	/docs	URL Swagger UI. null — выключить.
+FAT_OPENAPI_URL	str | null	/openapi.json	URL OpenAPI-схемы.
+FAT_REDOC_URL	str | null	/redoc	URL ReDoc.
+Request-ID
+Переменная	Тип	Дефолт	Описание
+FAT_REQUEST_ID_ENABLED	bool	true	Включить RequestIdMiddleware.
+FAT_REQUEST_ID_HEADER	str	X-Request-ID	Имя заголовка.
+Logging
+Переменная	Тип	Дефолт	Описание
+FAT_LOG_LEVEL	str	info	Уровень логирования.
+FAT_LOG_FORMAT	plain | json	plain	Формат лог-записей.
+FAT_ACCESS_LOG	bool	true	Включить AccessLogMiddleware.
+Errors
+Переменная	Тип	Дефолт	Описание
+FAT_ERROR_CODES	JSON {str: int}	{}	Переопределение числовых кодов.
+FAT_ERROR_CODE_FALLBACK	int	3500	Код для нераспознанных исключений.
+Uvicorn
+Переменная	Тип	Дефолт	Описание
+FAT_HOST	str	127.0.0.1	Хост uvicorn.
+FAT_PORT	int	8000	Порт uvicorn.
+FAT_RELOAD	bool	false	Uvicorn reload. При true форсит workers=1.
+FAT_WORKERS	int	1	Количество воркеров.
+FAT_BACKLOG	int	2048	Backlog uvicorn.
+FAT_TIMEOUT_KEEP_ALIVE	int	5	Keep-alive timeout.
+FAT_ROOT_PATH	str	``	ASGI root_path (за прокси).
+FAT_APP_PATH	str	app.main:app	Import string приложения.
+FAT_ENV_FILE	str | null	null	Опциональный env-файл для uvicorn.
+Пользовательские поля в наследнике BaseAppSettings тоже читаются из env — с тем же префиксом FAT_:
+
+python
 from fastbase import BaseAppSettings
 
 
@@ -128,15 +154,10 @@ class Settings(BaseAppSettings):
 
 
 settings = Settings()
-```
+Ошибки
+Единый конверт для всех ошибок — доменных, HTTPException, RequestValidationError, необработанных:
 
----
-
-## Ошибки
-
-Единый конверт для **всех** ошибок — доменных, `HTTPException`, `RequestValidationError`, необработанных:
-
-```json
+json
 {
   "success": false,
   "error": {
@@ -145,17 +166,16 @@ settings = Settings()
     "details": null
   }
 }
-```
+code — целое число;
 
-- `code` — целое число;
-- `message` — строка;
-- `details` — `null` или произвольная JSON-структура.
+message — строка;
+
+details — null или произвольная JSON-структура.
 
 Успешные ответы — сырой JSON. Envelope не вводится.
 
-### Иерархия исключений
-
-```python
+Иерархия исключений
+python
 from fastbase import (
     BaseHTTPError,     # 500
     NotFoundError,     # 404
@@ -165,203 +185,150 @@ from fastbase import (
     ForbiddenError,    # 403
     InternalError,     # 500
 )
-```
-
 Свои исключения наследуются от базовых:
 
-```python
+python
 from fastbase import NotFoundError
 
 
 class UserNotFoundError(NotFoundError):
     message = "User not found"
-```
-
 Числовой код резолвится в таком порядке:
 
-1. `exc.code` — явный override в `__init__`;
-2. `exc.default_code` — атрибут класса;
-3. первое совпадение по `type(exc).__mro__` в маппинге (например, `UserNotFoundError` без записи в маппинге получит код `NotFoundError`);
-4. `FAT_ERROR_CODE_FALLBACK`.
+exc.code — явный override в __init__;
 
-HTTP-статус и числовой код независимы: код можно задать через `FAT_ERROR_CODES`, а статус — через атрибут класса или `http_status`.
+exc.default_code — атрибут класса;
 
-### Как задать свой код
+первое совпадение по type(exc).__mro__ в маппинге;
 
-```dotenv
+FAT_ERROR_CODE_FALLBACK.
+
+Свой код задаётся через env:
+
+dotenv
 FAT_ERROR_CODES={"UserNotFoundError": 2001}
-```
+Интеграция с core-package
+Если FAT_INTEGRATIONS=core,event-infra, при старте приложения автоматически:
 
----
+Поднимается event-infra (start_infrastructure()), применяются миграции;
 
-## Middleware
+Поднимается core-package (start_core(router=router, discover=FAT_CORE_DISCOVER));
 
+Регистрируется обработчик core.exceptions.CoreError — все ошибки core автоматически конвертируются в единый конверт fastbase.
+
+Из роутов можно сразу использовать сценарии и get_db:
+
+python
+from fastapi import APIRouter, Depends
+from core import get_db, run
+
+router = APIRouter(tags=["users"])
+
+
+@router.post("/users")
+async def create_user(dto: CreateUserDTO) -> dict:
+    result = await run("register_user", dto)
+    return result.model_dump()
+Если FAT_INTEGRATIONS="" (по умолчанию) — никаких интеграций. Пользователь сам решает, как подключать БД, через Depends.
+
+Middleware
 Пакет ставит два middleware:
 
-- **`RequestIdMiddleware`** — читает заголовок `FAT_REQUEST_ID_HEADER` из запроса или генерирует `uuid4().hex`. Кладёт значение в `request.state.request_id` и в ответный заголовок.
-- **`AccessLogMiddleware`** — пишет строку `METHOD PATH STATUS DURATION_MS request_id=...` в логгер `fastbase.access`.
+RequestIdMiddleware — читает заголовок FAT_REQUEST_ID_HEADER из запроса или генерирует uuid4().hex. Кладёт значение в request.state.request_id и в ответный заголовок.
+
+AccessLogMiddleware — пишет строку METHOD PATH STATUS DURATION_MS request_id=... в логгер fastbase.access.
 
 Порядок — Request-ID снаружи, Access Log внутри. Request-ID доступен в логе и в заголовке ответа даже если access-лог упадёт.
 
-### Что **не** входит
+Что не входит
+CORS, GZip, TrustedHost — пакет их не ставит. Ставьте сами после make_app():
 
-CORS, GZip, TrustedHost — пакет их не ставит. Ставьте сами, как в голом FastAPI:
-
-```python
-from fastapi import FastAPI
+python
 from fastapi.middleware.cors import CORSMiddleware
+from fastbase import make_app
 
-app: FastAPI = create_app(settings, routers)
-
+app = make_app()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-```
+CLI
+Алиасы fastbase и fb работают идентично.
 
----
+fb init [--path app] [--force]
+Генерирует каноничную структуру. --path — целевая папка (по умолчанию app). --force перезаписывает файлы с маркером # fastbase: generated; файлы без маркера не трогаются никогда.
 
-## Запуск
+Статусы: created:, overwrite:, skip:, skip (user code):.
 
-Единственная точка входа — `run_api()`:
+fb check
+Read-only проверки:
 
-```python
-from fastbase import run_api
+обязательные файлы на месте;
 
+BaseAppSettings валидируется;
 
-def main() -> None:
-    run_api("app.main:app")
+app.main:app импортируется;
 
+FAT_ROUTES_PACKAGE импортируется;
 
-if __name__ == "__main__":
-    main()
-```
+дубли prefix в main.py;
 
-`run_api` блокирует процесс. Все параметры uvicorn читаются из настроек пакета: `FAT_HOST`, `FAT_PORT`, `FAT_RELOAD`, `FAT_WORKERS`, `FAT_LOG_LEVEL`, `FAT_APP_PATH`, `FAT_ENV_FILE`. Access-log uvicorn отключается автоматически — за него отвечает `AccessLogMiddleware`.
+конфликт FAT_RELOAD=true и FAT_WORKERS>1.
 
-Три режима:
+Печатает ok / warn / fail. Код возврата 1 при fail.
 
-```bash
-# Основной
-python -m app.main
+fb version
+Версия пакета одной строкой.
 
-# Внешний ASGI
-uvicorn app.main:app
-
-# Dev с autoreload
-uvicorn app.main:app --reload
-```
-
-Graceful shutdown — через `lifespan`, который передаётся в `create_app`:
-
-```python
-from contextlib import asynccontextmanager
-
-
-@asynccontextmanager
-async def lifespan(app):
-    # startup
-    yield
-    # shutdown
-
-
-app = create_app(settings, routers, lifespan=lifespan)
-```
-
----
-
-## CLI
-
-Команда пакета — `fastapi-transport`. Есть алиасы `fastbase` и `fb`; работают идентично.
-
-```bash
-fastapi-transport help   # список команд + ссылка на GitHub
-```
-
-### `fastapi-transport init [--path app] [--force]`
-
-Генерирует каноничную структуру. `--path` — целевая папка (по умолчанию `app`). `--force` перезаписывает файлы с маркером `# fastbase: generated`; файлы без маркера не трогаются никогда.
-
-Статусы в выводе:
-
-- `created:` — файл создан;
-- `overwrite:` — файл перезаписан (`--force` + маркер);
-- `skip:` — файл существует и не перезаписан;
-- `skip (user code):` — файл без маркера, пользовательский код.
-
-### `fastapi-transport check`
-
-Read-only проверка проекта:
-
-- обязательные файлы на месте;
-- `BaseAppSettings` валидируется;
-- `app.main:app` импортируется;
-- все роутеры из `app/api/v1/routes/*.py` подключены в `main.py`;
-- нет дублей `prefix`;
-- нет конфликта `FAT_RELOAD=true` и `FAT_WORKERS>1`.
-
-Печатает `ok` / `warn` / `fail`. Код возврата `1` при `fail`, иначе `0`.
-
-### `fastapi-transport version`
-
-Печатает версию пакета одной строкой.
-
----
-
-## Escape hatch
-
+Escape hatch
 Пакет можно выкинуть из проекта без переписывания приложения:
 
-```python
+python
 # было
-from fastbase import create_app, run_api
-app = create_app(settings, routers)
-run_api("app.main:app")
+from fastbase import make_app, start
+app = make_app()
+start()
 
 # стало — голый FastAPI
 from fastapi import FastAPI
 import uvicorn
 
 app = FastAPI()
-for r in routers:
-    app.include_router(r, prefix="/api/v1")
-
 uvicorn.run("app.main:app", host="127.0.0.1", port=8000)
-```
-
 Что остаётся работать без изменений:
 
-- роуты — обычные `APIRouter`;
-- DI — обычный `Depends`;
-- схемы — обычный `pydantic`;
-- OpenAPI — штатный.
+роуты — обычные APIRouter;
 
-`create_app` возвращает обычный `FastAPI`, `health_router` — обычный `APIRouter`. Их можно использовать вручную или не использовать вовсе.
+DI — обычный Depends;
 
----
+схемы — обычный pydantic;
 
-## Ограничения
+OpenAPI — штатный.
 
-Пакет **не** делает:
+Ограничения
+Пакет не делает:
 
-- не содержит бизнес-логику и не провоцирует её класть в API-слой;
-- не вводит свой DI — используется `Depends`;
-- не вводит свою валидацию — используется pydantic v2;
-- не вводит свой роутинг — используется `APIRouter`;
-- не диктует ORM, БД, аутентификацию, брокеры;
-- не заменяет OpenAPI;
-- не подключает сторонние библиотеки;
-- не забирает контроль над запуском проекта;
-- не вводит CORS / GZip / TrustedHost — ставит их клиент;
-- не вводит envelope успешных ответов;
-- не делает auto-discovery роутов;
-- не реализует команду `upgrade`;
-- не публикуется на PyPI (только GitHub).
-- обработчик `Exception` ловит исключения из роутов и зависимостей, но не из ASGI-middleware: исключения, брошенные внутри middleware, возвращаются в формате Starlette, а не в едином конверте.
----
+не содержит бизнес-логику;
 
-## Лицензия
+не вводит свой DI — используется Depends;
 
-MIT. См. [LICENSE](LICENSE).
+не вводит свою валидацию — pydantic v2;
+
+не вводит свой роутинг — APIRouter + авто-сборка;
+
+не диктует ORM, БД, аутентификацию, брокеры;
+
+не заменяет OpenAPI;
+
+не подключает сторонние библиотеки;
+
+не вводит CORS / GZip / TrustedHost;
+
+не вводит envelope успешных ответов.
+
+Обработчик Exception ловит исключения из роутов и зависимостей, но не из ASGI-middleware: исключения, брошенные внутри middleware, возвращаются в формате Starlette.
+
+Лицензия
+MIT. См. LICENSE.
