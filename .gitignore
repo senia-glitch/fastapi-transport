@@ -16,3 +16,4 @@ htmlcov/
 .ruff_cache/
 *.log
 files_content_*.txt
+text.py

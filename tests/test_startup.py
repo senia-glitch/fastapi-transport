@@ -134,6 +134,62 @@ def test_make_app_docs_configurable(project: Path, monkeypatch) -> None:
     # We test that setting to empty string at least doesn't crash.
     assert isinstance(app, FastAPI)
 
+
+def test_make_app_openapi_tags_default_empty(project: Path, monkeypatch) -> None:
+    _write_routes_package(project, {})
+    monkeypatch.setenv("FAT_ROUTES_PACKAGE", "routes_pkg")
+
+    app = make_app()
+    schema = app.openapi()
+    assert "tags" not in schema or schema["tags"] == []
+
+
+def test_make_app_openapi_tags_from_env(project: Path, monkeypatch) -> None:
+    _write_routes_package(project, {
+        "users": (
+            "from fastapi import APIRouter\n"
+            "router = APIRouter(tags=['users'])\n"
+            "@router.get('/list')\n"
+            "async def list_users(): return {'ok': True}\n"
+        ),
+    })
+    monkeypatch.setenv("FAT_ROUTES_PACKAGE", "routes_pkg")
+    monkeypatch.setenv(
+        "FAT_OPENAPI_TAGS",
+        '[{"name": "users", "description": "User management"}]',
+    )
+
+    app = make_app()
+    schema = app.openapi()
+    assert schema["tags"] == [{"name": "users", "description": "User management"}]
+
+
+def test_make_app_openapi_tags_control_order(project: Path, monkeypatch) -> None:
+    _write_routes_package(project, {
+        "users": (
+            "from fastapi import APIRouter\n"
+            "router = APIRouter(tags=['users'])\n"
+            "@router.get('/list')\n"
+            "async def list_users(): return {'ok': True}\n"
+        ),
+        "admin": (
+            "from fastapi import APIRouter\n"
+            "router = APIRouter(tags=['admin'])\n"
+            "@router.get('/stats')\n"
+            "async def stats(): return {'ok': True}\n"
+        ),
+    })
+    monkeypatch.setenv("FAT_ROUTES_PACKAGE", "routes_pkg")
+    monkeypatch.setenv(
+        "FAT_OPENAPI_TAGS",
+        '[{"name": "admin", "description": "Admin"}, {"name": "users", "description": "Users"}]',
+    )
+
+    app = make_app()
+    schema = app.openapi()
+    tag_names = [t["name"] for t in schema["tags"]]
+    assert tag_names == ["admin", "users"]
+
 def test_make_app_missing_routes_package_warns(project: Path, monkeypatch) -> None:
     monkeypatch.setenv("FAT_ROUTES_PACKAGE", "definitely_not_a_package_xyz")
 
@@ -337,13 +393,16 @@ def test_make_app_rejects_unknown_integration(project: Path, monkeypatch) -> Non
         make_app()
 
 
-def test_make_app_rejects_partial_integration(project: Path, monkeypatch) -> None:
+def test_make_app_accepts_core_only_integration(
+    project: Path, monkeypatch
+) -> None:
+    """FAT_INTEGRATIONS=core (subset) should be accepted, not rejected."""
     _write_routes_package(project, {})
     monkeypatch.setenv("FAT_ROUTES_PACKAGE", "routes_pkg")
     monkeypatch.setenv("FAT_INTEGRATIONS", "core")
 
-    with pytest.raises(ValueError, match="must be either empty or 'core,event-infra'"):
-        make_app()
+    app = make_app()
+    assert isinstance(app, FastAPI)
 
 
 def test_make_app_empty_integrations_lifespan_is_none(

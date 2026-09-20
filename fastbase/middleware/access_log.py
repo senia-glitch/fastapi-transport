@@ -14,10 +14,20 @@ class AccessLogMiddleware:
     """Emit one access-log line per request."""
 
     def __init__(self, app, *, logger_name: str = "fastbase.access") -> None:
+        """Initialise the middleware.
+
+        Parameters
+        ----------
+        app:
+            The next ASGI application in the chain.
+        logger_name:
+            Name of the logger to emit access lines to.
+        """
         self.app = app
         self.logger = logging.getLogger(logger_name)
 
     async def __call__(self, scope, receive, send) -> None:
+        """ASGI callable — logs method, path, status, duration and request id."""
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -34,7 +44,7 @@ class AccessLogMiddleware:
             await self.app(scope, receive, send_wrapper)
         finally:
             duration_ms = int((time.perf_counter() - start) * 1000)
-            request_id = (scope.get("state") or {}).get("request_id", "-")
+            request_id = scope.get("state", {}).get("request_id", "-")
             method = scope.get("method", "-")
             path = scope.get("path", "-")
             status = status_holder["status"]

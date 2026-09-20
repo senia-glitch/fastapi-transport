@@ -2,6 +2,11 @@
 
 The package never imports these dependencies at module top-level.
 They are pulled in lazily, only when FAT_INTEGRATIONS enables them.
+
+Supported combinations:
+  - ``""``               — no integrations (default)
+  - ``"core"``           — core-package exception handlers only (no lifespan)
+  - ``"core,event-infra"`` — full stack: core-package + event-infra lifespan
 """
 
 from __future__ import annotations
@@ -17,8 +22,8 @@ def make_integrations_lifespan(
 ) -> Callable | None:
     """Return an async lifespan callable if integrations are enabled.
 
-    Returns None when `integrations` is empty.
-    Raises ValueError for unsupported combinations.
+    Returns ``None`` when *integrations* is empty or contains only
+    ``"core"`` (core handlers are installed separately in ``startup.py``).
     """
     if not integrations:
         return None
@@ -28,8 +33,6 @@ def make_integrations_lifespan(
 
         return core_event_lifespan(settings)
 
-    # _validate_integrations already rejects this, but guard anyway.
-    raise ValueError(
-        f"Unsupported integrations combination: {integrations}. "
-        f"Use empty or 'core,event-infra'."
-    )
+    # "core" alone → no lifespan needed (handlers installed in startup.py).
+    # "event-infra" alone → not supported (would need core).
+    return None

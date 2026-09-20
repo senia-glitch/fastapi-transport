@@ -21,7 +21,7 @@ from fastbase.errors import (
     install_exception_handlers,
 )
 from fastbase.middleware import AccessLogMiddleware, RequestIdMiddleware
-from fastbase.routing import health_router
+from fastbase.routing import health_router, scenario_route
 from fastbase.settings import BaseAppSettings
 from fastbase.startup import make_app, start
 
@@ -44,6 +44,7 @@ __all__ = [
     "AccessLogMiddleware",
     "RequestIdMiddleware",
     "health_router",
+    "scenario_route",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

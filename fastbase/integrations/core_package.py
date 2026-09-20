@@ -40,7 +40,9 @@ def install_core_handlers(app: FastAPI, settings: BaseAppSettings) -> None:
     async def _core_error_handler(
         request: Request, exc: CoreError
     ) -> JSONResponse:
-        status = getattr(exc, "http_status", None) or 500
+        status = getattr(exc, "http_status", None)
+        if status is None:
+            status = 500
 
         code = getattr(exc, "code", None)
         if code is None:

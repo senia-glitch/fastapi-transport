@@ -102,6 +102,54 @@ def test_request_id_middleware_passes_through_non_http_scope() -> None:
     assert received == [{"type": "lifespan.startup.complete"}]
 
 
+def test_request_id_truncates_long_header() -> None:
+    """Request IDs longer than 128 chars are truncated."""
+    app = FastAPI()
+    app.add_middleware(RequestIdMiddleware)
+
+    @app.get("/")
+    async def root(request: Request) -> dict:
+        return {"rid": request.state.request_id}
+
+    long_id = "x" * 200
+    r = TestClient(app).get("/", headers={"X-Request-ID": long_id})
+    assert r.status_code == 200
+    rid = r.json()["rid"]
+    assert len(rid) == 128
+
+
+def test_request_id_handles_malformed_header() -> None:
+    """Latin-1 decode of header bytes — all byte values 0-255 are valid."""
+    from fastbase.middleware.request_id import RequestIdMiddleware as RID
+
+    async def noop(scope, receive, send):
+        pass
+
+    mw = RID(noop)
+    # All byte values 0-255 are valid Latin-1, so decode always succeeds.
+    # The try/except is a safety net for edge cases.
+    scope = {
+        "type": "http",
+        "headers": [
+            (b"x-request-id", b"\x00\x01\xff valid-id"),
+        ],
+    }
+    state = {}
+    scope["state"] = state
+
+    async def receive():
+        return {"type": "http.request", "body": b""}
+
+    sent = []
+
+    async def send(msg):
+        sent.append(msg)
+
+    asyncio.run(mw(scope, receive, send))
+    rid = state.get("request_id", "")
+    assert rid == "\x00\x01\xff valid-id"
+
+
 # ---------------------------------------------------------------------------
 # AccessLogMiddleware
 # ---------------------------------------------------------------------------
@@ -286,3 +334,13 @@ def test_configure_logging_plain_format() -> None:
     logger = logging.getLogger("fastbase")
     assert logger.level == logging.WARNING
     assert isinstance(logger.handlers[0].formatter, PlainFormatter)
+
+
+def test_configure_logging_invalid_level_warns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = BaseAppSettings(log_level="INVALID_LEVEL")
+    with pytest.warns(UserWarning, match="Invalid FAT_LOG_LEVEL"):
+        configure_logging(settings)
+    logger = logging.getLogger("fastbase")
+    assert logger.level == logging.INFO  # fallback

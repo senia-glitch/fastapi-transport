@@ -93,6 +93,25 @@ def test_resolve_falls_back_when_no_match() -> None:
     assert resolve_code(Weird(), DEFAULT_ERROR_CODES, 4242) == 4242
 
 
+def test_resolve_class_identity_fallback() -> None:
+    """When name-based lookup fails, class identity against builtins works."""
+    from fastbase.errors.codes import _CLASS_CODES
+
+    # Create a class whose name is NOT in the mapping, but whose MRO
+    # contains a built-in fastbase exception via class identity.
+    class MyCustomError(NotFoundError):
+        message = "custom"
+
+    # Remove ALL fastbase exception names from the mapping to force
+    # the class identity fallback phase.
+    custom_mapping = {
+        k: v for k, v in DEFAULT_ERROR_CODES.items()
+        if k not in _CLASS_CODES.__class__.__name__
+    }
+    # Actually, just use an empty mapping to force class identity
+    assert resolve_code(MyCustomError(), {}, 9999) == 3001
+
+
 def test_resolve_explicit_none_code_falls_through() -> None:
     exc = NotFoundError(code=None)
     assert resolve_code(exc, DEFAULT_ERROR_CODES, 3500) == 3001

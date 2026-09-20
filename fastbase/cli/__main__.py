@@ -3,6 +3,7 @@
 Commands:
     fastapi-transport init [--path app] [--force]
     fastapi-transport check
+    fastapi-transport upgrade [--check]
     fastapi-transport version
     fastapi-transport help
 
@@ -14,6 +15,7 @@ import sys
 
 from fastbase.cli._check import main_check
 from fastbase.cli._init import main_init
+from fastbase.cli._upgrade import main_upgrade
 from fastbase.cli._version import main_version
 
 PROG = "fastapi-transport"
@@ -44,6 +46,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     sub.add_parser("check", help="Check the project for common problems.")
+
+    p_upgrade = sub.add_parser(
+        "upgrade", help="Update fastbase to the latest version from GitHub."
+    )
+    p_upgrade.add_argument(
+        "--check",
+        action="store_true",
+        help="Only check if an update is available; do not install.",
+    )
+
     sub.add_parser("version", help="Print package version.")
     sub.add_parser("help", help="Show this help message and exit.")
 
@@ -58,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
         return main_init(path=args.path, force=args.force)
     if args.cmd == "check":
         return main_check()
+    if args.cmd == "upgrade":
+        return main_upgrade(check_only=args.check)
     if args.cmd == "version":
         return main_version()
     if args.cmd == "help":

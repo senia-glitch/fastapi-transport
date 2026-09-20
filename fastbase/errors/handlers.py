@@ -108,6 +108,12 @@ def install_exception_handlers(
             headers=exc.headers,
         )
 
+    # Design note: this catch-all is intentional.  The uniform envelope
+    # guarantees that *every* HTTP response has ``{"success": false, ...}``
+    # shape.  ``BaseException`` subclasses (KeyboardInterrupt, SystemExit)
+    # are NOT caught here — Starlette never routes them to this handler.
+    # ``MemoryError`` and other fatal ``Exception`` subclasses ARE caught;
+    # returning 500 is preferable to crashing the ASGI worker.
     @app.exception_handler(Exception)
     async def _internal(request: Request, exc: Exception) -> JSONResponse:
         logger.exception("Unhandled exception")

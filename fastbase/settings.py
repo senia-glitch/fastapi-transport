@@ -42,6 +42,7 @@ class BaseAppSettings(BaseSettings):
     docs_url: str | None = "/docs"
     openapi_url: str | None = "/openapi.json"
     redoc_url: str | None = "/redoc"
+    openapi_tags: list[dict[str, str]] = []
 
     # --- Request-ID ---
     request_id_enabled: bool = True

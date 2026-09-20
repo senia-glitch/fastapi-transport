@@ -95,6 +95,7 @@ def _build_app(settings: BaseAppSettings) -> FastAPI:
         docs_url=settings.docs_url,
         openapi_url=settings.openapi_url,
         redoc_url=settings.redoc_url,
+        openapi_tags=settings.openapi_tags or None,
         lifespan=lifespan,
     )
 
@@ -138,16 +139,16 @@ def _build_app(settings: BaseAppSettings) -> FastAPI:
 
 
 def _validate_integrations(integrations: list[str]) -> None:
+    """Validate FAT_INTEGRATIONS values.
+
+    Allowed: empty list, or any subset of ``{"core", "event-infra"}``.
+    Unknown values raise ``ValueError``.
+    """
     unknown = set(integrations) - _ALLOWED_INTEGRATIONS
     if unknown:
         raise ValueError(
             f"Unknown FAT_INTEGRATIONS values: {sorted(unknown)}. "
             f"Allowed: {sorted(_ALLOWED_INTEGRATIONS)} or empty string."
-        )
-    if integrations and set(integrations) != _ALLOWED_INTEGRATIONS:
-        raise ValueError(
-            f"FAT_INTEGRATIONS must be either empty or "
-            f"'core,event-infra' (got {integrations})."
         )
 
 

@@ -187,3 +187,24 @@ def test_core_discover_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     monkeypatch.setenv("FAT_CORE_DISCOVER", "myapp.scenarios")
     s = BaseAppSettings()
     assert s.core_discover == "myapp.scenarios"
+
+
+# ---------------------------------------------------------------------------
+# openapi_tags
+# ---------------------------------------------------------------------------
+
+
+def test_openapi_tags_default_empty(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _clear_fat_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    s = BaseAppSettings()
+    assert s.openapi_tags == []
+
+
+def test_openapi_tags_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _clear_fat_env(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    tags = [{"name": "users", "description": "User management"}]
+    monkeypatch.setenv("FAT_OPENAPI_TAGS", json.dumps(tags))
+    s = BaseAppSettings()
+    assert s.openapi_tags == tags

@@ -7,22 +7,35 @@ Behaviour:
     (visible as request.state.request_id in endpoints).
   - Echoes the value in the response header.
   - Sets a private ContextVar so that logging can pick it up.
+  - Incoming header values longer than 128 characters are truncated.
 """
 
 import uuid
 
 from fastbase.logging_setup import reset_request_id, set_request_id
 
+_MAX_REQUEST_ID_LEN = 128
+
 
 class RequestIdMiddleware:
     """Attach a request id to every HTTP request."""
 
     def __init__(self, app, *, header: str = "X-Request-ID") -> None:
+        """Initialise the middleware.
+
+        Parameters
+        ----------
+        app:
+            The next ASGI application in the chain.
+        header:
+            HTTP header name to read/write the request id.
+        """
         self.app = app
         self.header = header
         self.header_lower = header.lower().encode("latin-1")
 
     async def __call__(self, scope, receive, send) -> None:
+        """ASGI callable — extracts or generates a request id."""
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -30,8 +43,14 @@ class RequestIdMiddleware:
         incoming: str | None = None
         for name, value in scope.get("headers") or []:
             if name == self.header_lower:
-                incoming = value.decode("latin-1")
+                try:
+                    incoming = value.decode("latin-1")
+                except Exception:
+                    incoming = None
                 break
+
+        if incoming and len(incoming) > _MAX_REQUEST_ID_LEN:
+            incoming = incoming[:_MAX_REQUEST_ID_LEN]
 
         request_id = incoming or uuid.uuid4().hex
 

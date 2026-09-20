@@ -38,9 +38,10 @@ def test_make_lifespan_full_returns_callable(monkeypatch) -> None:
     assert callable(lifespan)
 
 
-def test_make_lifespan_rejects_partial_combination() -> None:
-    with pytest.raises(ValueError):
-        make_integrations_lifespan(BaseAppSettings(), ["core"])
+def test_make_lifespan_core_only_returns_none() -> None:
+    """FAT_INTEGRATIONS=core → no lifespan (handlers installed separately)."""
+    result = make_integrations_lifespan(BaseAppSettings(), ["core"])
+    assert result is None
 
 
 # ============================================================

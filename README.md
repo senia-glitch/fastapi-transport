@@ -118,6 +118,12 @@ Docs
 FAT_DOCS_URL	str | null	/docs	URL Swagger UI. null — выключить.
 FAT_OPENAPI_URL	str | null	/openapi.json	URL OpenAPI-схемы.
 FAT_REDOC_URL	str | null	/redoc	URL ReDoc.
+FAT_OPENAPI_TAGS	JSON [{name, description}]	`[]`	Упорядоченный список тегов для OpenAPI.
+
+FAT_OPENAPI_TAGS задаёт порядок и описание тегов в /docs. Порядок тегов детерминирован и не зависит от порядка файлов роутов:
+
+dotenv
+FAT_OPENAPI_TAGS='[{"name": "users", "description": "Пользователи"}, {"name": "admin", "description": "Админка"}]'
 Request-ID
 Переменная	Тип	Дефолт	Описание
 FAT_REQUEST_ID_ENABLED	bool	true	Включить RequestIdMiddleware.
@@ -231,6 +237,25 @@ async def create_user(dto: CreateUserDTO) -> dict:
     return result.model_dump()
 Если FAT_INTEGRATIONS="" (по умолчанию) — никаких интеграций. Пользователь сам решает, как подключать БД, через Depends.
 
+Также поддерживается режим FAT_INTEGRATIONS=core (только core-package без event-infra). В этом случае регистрируется обработчик CoreError, но lifespan не создаётся.
+
+scenario_route — автоматический response_model
+
+Декоратор scenario_route автоматически подставляет response_model из реестра сценариев core-package:
+
+python
+from fastapi import APIRouter
+from fastbase import scenario_route
+
+router = APIRouter(tags=["users"])
+
+@scenario_route(router, "/users", method="post", scenario="register_user")
+async def create_user(dto: CreateUserDTO):
+    result = await run("register_user", dto)
+    return result
+
+Если core-package установлен — response_model берётся из реестра. Если не установлен — логируется warning, роут работает без response_model.
+
 Middleware
 Пакет ставит два middleware:
 
@@ -281,6 +306,14 @@ FAT_ROUTES_PACKAGE импортируется;
 
 fb version
 Версия пакета одной строкой.
+
+fb upgrade [--check]
+Обновление пакета до последней версии с GitHub. НЕ затрагивает файлы проекта (app/, .env.fastbase, pyproject.toml).
+
+fb upgrade — проверяет версию на GitHub, если доступна новая → выполняет pip install --upgrade.
+fb upgrade --check — только проверяет, не обновляет (полезно в CI).
+
+Проверка совместимости: если новая версия требует другой Python — спрашивает подтверждение yes/no.
 
 Escape hatch
 Пакет можно выкинуть из проекта без переписывания приложения:
