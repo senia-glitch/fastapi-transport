@@ -8,10 +8,11 @@ dist/
 venv/
 .env
 .env.local
+.env.fastbase
 .pytest_cache/
 .coverage
 htmlcov/
 .mypy_cache/
 .ruff_cache/
 *.log
-*.egg-info/
+files_content_*.txt

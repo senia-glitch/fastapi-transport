@@ -93,6 +93,13 @@ def configure_logging(settings: BaseAppSettings) -> None:
     """
     level = logging.getLevelName(settings.log_level.upper())
     if not isinstance(level, int):
+        import warnings
+
+        warnings.warn(
+            f"Invalid FAT_LOG_LEVEL={settings.log_level!r}, falling back to INFO. "
+            f"Valid levels: DEBUG, INFO, WARNING, ERROR, CRITICAL.",
+            stacklevel=2,
+        )
         level = logging.INFO
 
     logger = logging.getLogger("fastbase")

@@ -163,7 +163,7 @@ def main_init(*, path: str = "app", force: bool = False) -> int:
     _print_tree(target, cwd)
     print()
     print("Next steps:")
-    print("  1. pip install -r requirements.txt")
+    print("  1. pip install -e .")
     print("  2. Edit .env.fastbase")
     print("  3. python -m app.main")
     print()

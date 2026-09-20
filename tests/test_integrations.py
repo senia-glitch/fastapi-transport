@@ -263,23 +263,6 @@ def test_core_event_lifespan_warns_when_discover_empty(
 def test_core_event_lifespan_raises_without_event_infra(monkeypatch) -> None:
     """When run_infrastructure is missing, entering the lifespan raises."""
     monkeypatch.setitem(sys.modules, "run_infrastructure", None)
-    monkeypatch.setitem(sys.modules, "core", types.ModuleType("core"))
-
-    from fastbase.integrations.core_package import core_event_lifespan
-
-    lifespan = core_event_lifespan(BaseAppSettings())
-
-    async def _run():
-        async with lifespan(None):
-            pass
-
-    with pytest.raises(ImportError, match="event-infra"):
-        asyncio.run(_run())
-
-
-def test_core_event_lifespan_raises_without_event_infra(monkeypatch) -> None:
-    """run_infrastructure отсутствует → ошибка про event-infra."""
-    monkeypatch.setitem(sys.modules, "run_infrastructure", None)
 
     from fastbase.integrations.core_package import core_event_lifespan
     lifespan = core_event_lifespan(BaseAppSettings())
